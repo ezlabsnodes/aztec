@@ -9,7 +9,7 @@ COMPOSE_FILE="$AZTEC_DIR/docker-compose.yml"
 COMPOSE_CMD="docker compose"   # ganti jadi "docker-compose" kalau itu yang ada di server
 CONTAINER_NAME="aztec-sequencer"
 NEW_GOVERNANCE_PAYLOAD="0xDCd9DdeAbEF70108cE02576df1eB333c4244C666"
-SNAPSHOT_URL="https://snapshots.aztec.graphops.xyz/files"
+SNAPSHOT_URL="--snapshots-url https://files5.blacknodes.net/Aztec/"
 AZTEC_IMAGE_VERSION="2.0.4"
 
 echo "### Starting Aztec Node Update Script ###"
