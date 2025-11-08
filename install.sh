@@ -128,8 +128,8 @@ export PATH="$PATH:$AZTEC_BIN"
 
 # Upgrade to the specific required version
 if [ -x "$AZTEC_BIN/aztec-up" ]; then
-    info "Upgrading Aztec CLI to version 2.0.4..."
-    "$AZTEC_BIN/aztec-up" -v 2.0.4
+    info "Upgrading Aztec CLI to version 2.1.2..."
+    "$AZTEC_BIN/aztec-up" -v 2.1.2
 else
     error "aztec-up command not found in $AZTEC_BIN after installation."
 fi
@@ -197,7 +197,7 @@ cat > docker-compose.yml <<YAML
 services:
   aztec-node:
     container_name: aztec-sequencer
-    image: aztecprotocol/aztec:2.0.4
+    image: aztecprotocol/aztec:2.1.2
     restart: unless-stopped
     environment:
       ETHEREUM_HOSTS: \${ETHEREUM_RPC_URL}
@@ -215,7 +215,7 @@ services:
       --node
       --archiver
       --sequencer
-      --snapshots-url https://snapshots.aztec.graphops.xyz/files
+      --sync-mode full
       --port 8080"
     ports:
       - "40400:40400/tcp"
