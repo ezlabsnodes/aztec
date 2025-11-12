@@ -103,18 +103,6 @@ green "[3/5] Removing data and configuration files..."
 # Remove Aztec directory and configs
 rm -rf "$AZTEC_DIR" 2>/dev/null && green "Removed Aztec directory: $AZTEC_DIR"
 
-# Remove Aztec data
-rm -rf "$AZTEC_DATA" 2>/dev/null && green "Removed Aztec data: $AZTEC_DATA"
-
-# Remove installer script if exists
-rm -f "$HOME_DIR/aztec-install.sh" 2>/dev/null && green "Removed installer script"
-
-# Remove from .bashrc
-if [ -f "$HOME_DIR/.bashrc" ] && grep -q "$AZTEC_BIN" "$HOME_DIR/.bashrc"; then
-    sed -i "\|$AZTEC_BIN|d" "$HOME_DIR/.bashrc"
-    green "Removed Aztec from PATH in .bashrc"
-fi
-
 # ==========================================
 # Step 4: Remove Aztec CLI
 # ==========================================
