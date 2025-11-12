@@ -244,6 +244,7 @@ services:
       --node
       --archiver
       --sequencer
+      --sync-mode full
       --network testnet
     networks:
       - aztec
