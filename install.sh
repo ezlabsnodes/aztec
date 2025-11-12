@@ -106,14 +106,11 @@ fi
 # ==========================================
 green "[3/6] Installing Aztec CLI..."
 
-# **FIX:** Download to the user's home directory instead of /tmp to avoid disk space
-# or permission issues with the temporary directory.
 INSTALLER_PATH="$HOME_DIR/aztec-install.sh"
 
 curl -fsSL https://install.aztec.network -o "$INSTALLER_PATH" || error "Failed to download Aztec installer. Please check your disk space with 'df -h'."
 
 # Automate the installer prompts: continue=y, add-to-PATH=n
-# We run the installer as the original user, not as root.
 printf 'y\nn\n' | sudo -u "$USER_NAME" bash "$INSTALLER_PATH"
 
 # Clean up the installer script
@@ -138,13 +135,14 @@ fi
 # Step 4: User Configuration
 # ==========================================
 green "[4/6] Please provide your configuration..."
-read -rp "ETHEREUM_RPC_URL: " ETHEREUM_RPC_URL
-read -rp "CONSENSUS_BEACON_URL: " CONSENSUS_BEACON_URL
-read -rp "VALIDATOR_PRIVATE_KEYS (comma-separated): " VALIDATOR_PRIVATE_KEYS
+read -rp "ETHEREUM_HOSTS (Ethereum RPC URL): " ETHEREUM_HOSTS
+read -rp "L1_CONSENSUS_HOST_URLS (Consensus Beacon URL): " L1_CONSENSUS_HOST_URLS
+read -rp "VALIDATOR_PRIVATE_KEY (Ethereum Private Key): " VALIDATOR_PRIVATE_KEY
 read -rp "COINBASE (Your Wallet Address): " COINBASE
+read -rp "BLS_PRIVATE_KEY: " BLS_PRIVATE_KEY
 
 # Validate that inputs are not empty
-for varname in ETHEREUM_RPC_URL CONSENSUS_BEACON_URL VALIDATOR_PRIVATE_KEYS COINBASE; do
+for varname in ETHEREUM_HOSTS L1_CONSENSUS_HOST_URLS VALIDATOR_PRIVATE_KEY COINBASE BLS_PRIVATE_KEY; do
     if [ -z "${!varname}" ]; then
         error "$varname must not be empty."
     fi
@@ -168,12 +166,30 @@ else
 fi
 
 # ==========================================
-# Step 5: Create Docker Config Files
+# Step 5: Create Directory Structure and Config Files
 # ==========================================
-green "[5/6] Creating directory and config files..."
+green "[5/6] Creating directory structure and config files..."
 AZTEC_DIR="$HOME_DIR/aztec"
-mkdir -p "$AZTEC_DIR"
+mkdir -p "$AZTEC_DIR/data" "$AZTEC_DIR/keys"
 cd "$AZTEC_DIR"
+
+# Create keystore.json
+info "Creating keystore.json in $AZTEC_DIR/keys/"
+cat > "$AZTEC_DIR/keys/keystore.json" <<EOF
+{
+  "schemaVersion": 1,
+  "validators": [
+    {
+      "attester": {
+        "eth": "$VALIDATOR_PRIVATE_KEY",
+        "bls": "$BLS_PRIVATE_KEY"
+      },
+      "feeRecipient": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "coinbase": "$COINBASE"
+    }
+  ]
+}
+EOF
 
 # Backup existing files
 [ -f .env ] && { info "Backing up existing .env file..."; mv .env ".env.bak.$(date +%s)"; }
@@ -182,48 +198,62 @@ cd "$AZTEC_DIR"
 # Write .env file
 info "Writing configuration to $AZTEC_DIR/.env"
 cat > .env <<EOF
-ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
-CONSENSUS_BEACON_URL=${CONSENSUS_BEACON_URL}
-VALIDATOR_PRIVATE_KEYS=${VALIDATOR_PRIVATE_KEYS}
-COINBASE=${COINBASE}
+DATA_DIRECTORY=./data
+KEY_STORE_DIRECTORY=./keys
+LOG_LEVEL=info
+ETHEREUM_HOSTS=${ETHEREUM_HOSTS}
+L1_CONSENSUS_HOST_URLS=${L1_CONSENSUS_HOST_URLS}
 P2P_IP=${P2P_IP}
-GOVERNANCE_PAYLOAD=0xDCd9DdeAbEF70108cE02576df1eB333c4244C666
+GOVERNANCE_PROPOSER_PAYLOAD_ADDRESS=0xDCd9DdeAbEF70108cE02576df1eB333c4244C666
+P2P_PORT=40400
+AZTEC_PORT=8080
 AZTEC_ADMIN_PORT=8880
 EOF
 
 # Write docker-compose.yml file
 info "Writing configuration to $AZTEC_DIR/docker-compose.yml"
-cat > docker-compose.yml <<YAML
+cat > docker-compose.yml <<'YAML'
+version: '3.8'
+
 services:
-  aztec-node:
-    container_name: aztec-sequencer
-    image: aztecprotocol/aztec:2.1.2
-    restart: unless-stopped
+  aztec-sequencer:
+    image: "aztecprotocol/aztec:2.1.2"
+    container_name: "aztec"
+    ports:
+      - "${AZTEC_PORT}:${AZTEC_PORT}"
+      - "${AZTEC_ADMIN_PORT}:${AZTEC_ADMIN_PORT}"
+      - "${P2P_PORT}:${P2P_PORT}"
+      - "${P2P_PORT}:${P2P_PORT}/udp"
+    volumes:
+      - ${DATA_DIRECTORY}:/var/lib/data
+      - ${KEY_STORE_DIRECTORY}:/var/lib/keystore
     environment:
-      ETHEREUM_HOSTS: \${ETHEREUM_RPC_URL}
-      L1_CONSENSUS_HOST_URLS: \${CONSENSUS_BEACON_URL}
-      DATA_DIRECTORY: /data
-      VALIDATOR_PRIVATE_KEYS: \${VALIDATOR_PRIVATE_KEYS}
-      COINBASE: \${COINBASE}
-      P2P_IP: \${P2P_IP}
-      GOVERNANCE_PAYLOAD: \${GOVERNANCE_PAYLOAD}
-      AZTEC_ADMIN_PORT: \${AZTEC_ADMIN_PORT}
-      LOG_LEVEL: info
+      KEY_STORE_DIRECTORY: /var/lib/keystore
+      DATA_DIRECTORY: /var/lib/data
+      LOG_LEVEL: ${LOG_LEVEL}
+      ETHEREUM_HOSTS: ${ETHEREUM_HOSTS}
+      L1_CONSENSUS_HOST_URLS: ${L1_CONSENSUS_HOST_URLS}
+      GOVERNANCE_PROPOSER_PAYLOAD_ADDRESS: ${GOVERNANCE_PROPOSER_PAYLOAD_ADDRESS}
+      P2P_IP: ${P2P_IP}
+      P2P_PORT: ${P2P_PORT}
+      AZTEC_PORT: ${AZTEC_PORT}
+      AZTEC_ADMIN_PORT: ${AZTEC_ADMIN_PORT}
     entrypoint: >
-      sh -c "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start
-      --network testnet
+      node
+      --no-warnings
+      /usr/src/yarn-project/aztec/dest/bin/index.js
+      start
       --node
       --archiver
       --sequencer
-      --sync-mode full
-      --port 8080"
-    ports:
-      - "40400:40400/tcp"
-      - "40400:40400/udp"
-      - "8080:8080"
-      - "8880:8880"
-    volumes:
-      - "${HOME_DIR}/.aztec/testnet/data/:/data"
+      --network testnet
+    networks:
+      - aztec
+    restart: always
+
+networks:
+  aztec:
+    name: aztec
 YAML
 
 # Ensure the owner of the config files is the original user
@@ -243,6 +273,7 @@ else
     error "Docker Compose not found. Please ensure it's installed correctly."
 fi
 
+cd "$AZTEC_DIR"
 sudo $COMPOSE_CMD up -d
 
 green "✅ Done! Your Aztec node is starting in the background."
@@ -250,9 +281,11 @@ echo
 echo "================ SUMMARY ================"
 echo "Working directory: $AZTEC_DIR"
 echo "Public IP Address: $P2P_IP"
+echo "Data directory: $AZTEC_DIR/data"
+echo "Keys directory: $AZTEC_DIR/keys"
 echo
 echo "To check the logs of your node, run:"
-yellow "  docker logs -f aztec-sequencer"
+yellow "  docker logs -f --tail 200 aztec"
 echo
 echo "To stop your node, run:"
 yellow "  cd $AZTEC_DIR && docker compose down"
