@@ -198,7 +198,7 @@ EOF
 # Write .env file
 info "Writing configuration to $AZTEC_DIR/.env"
 cat > .env <<EOF
-DATA_DIRECTORY=./data
+DATA_DIRECTORY=/root/.aztec/testnet/data/
 KEY_STORE_DIRECTORY=./keys
 LOG_LEVEL=info
 ETHEREUM_HOSTS=${ETHEREUM_HOSTS}
