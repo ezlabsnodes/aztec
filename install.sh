@@ -213,8 +213,6 @@ EOF
 # Write docker-compose.yml file
 info "Writing configuration to $AZTEC_DIR/docker-compose.yml"
 cat > docker-compose.yml <<'YAML'
-version: '3.8'
-
 services:
   aztec-sequencer:
     image: "aztecprotocol/aztec:2.1.2"
